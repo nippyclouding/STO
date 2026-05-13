@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Build outputs
+/dist
+/build
+/.next
+/out
+**/dist/
+**/build/
+**/out/
+
+# Environment variables and local app config
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/application-local.properties
+
+# Keep profile files commit-safe by using ${ENV_VAR} placeholders only.
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Cache
+.eslintcache
+.cache/
+.parcel-cache/
+.turbo/
+**/.gradle/
+
+# Test coverage
+/coverage
+**/coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Archives and local notes
+*.zip
+todolist.md
