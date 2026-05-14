@@ -1,133 +1,101 @@
-# Convention
+# TRIPTON
 
-## 1. BaseEntity 상속받기
+**STO 부동산 토큰 증권 금융 프로젝트**
 
-BaseEntity 추상 클래스 : 공용 필드 전용, createdAt, updatedAt을 가지고 있다.
-다른 엔티티 클래스에서 extends BaseEntity 사용하면 createdAt, updatedAt을 매 번 쓸 필요 없다 (상속으로 공용 필드 전달)
-그 외 컬럼 (executedAt 등 다른 날짜 필드가 필요할 경우 해당 엔티티 클래스에서 직접 추가 작성하기)
+<sub>해당 파일은 기능 서술에 초점을 두고 있습니다. 기술적 의사결정 등과 같은 부분은 <a href="https://nippyclouding.github.io/project.html">포트폴리오</a>에서 확인할 수 있습니다.</sub>
 
-```java
-@Getter
-@MappedSuperclass
-@EntityListeners(AuditingEntityListener.class) 
-public abstract class BaseEntity { 
-    @CreatedDate
-    @Column(updatable = false) 
-    private LocalDateTime createdAt;
-    @LastModifiedDate
-    private LocalDateTime updatedAt;
-}
-```
+사용자는 부동산 기반 STO 토큰을 조회하고, 호가 주문을 통해 매수/매도 거래를 진행할 수 있습니다.<br>
+체결 결과는 실시간 호가창, 체결 내역, 알람으로 반영되며, 매수/매도를 통한 정산 및 환전 기능을 제공합니다.
 
-=> `public class Token extends BaseEntity { ... }`
+<sub>본 프로젝트는 교육용 시뮬레이션 프로젝트이며, 실제 투자 권유 또는 실제 금융 거래 서비스를 목적으로 하지 않습니다.</sub>
 
-## 2. 엔티티 연관관계는 가급적 단방향
+---
 
-회원 탈퇴 시 주문 요청 삭제 등 Cascade로 반드시 묶어줄 경우가 아니면 단방향 관계로 설정하기
+<img width="1781" height="808" alt="메인 화면" src="./README_IMG_SOURCE/main.png" />
 
-## 3. 모든 연관관계는 특별한 이유가 없다면 Lazy Loading으로 처리하기
+---
 
-## 4. 메서드 이름
+### 개발 과정 & 사용 기술
 
-컨트롤러 - 서비스 - 리포지토리 모두 통일 vs 각 계층별 메서드를 다르게 사용 => 뭐가 좋을까요
+**개발 기간**
+- 2개월 (2026.03.~2026.04.)
+- 신한 SW 금융 아카데미 프로젝트 우수상
 
-## 5. DTO
+**개발 인원**
+- 5명 (프론트엔드 2명, 백엔드 3명)
 
-- DTO에서 validation 검증 하기 (@NotBlank, NotEmpty ..) => 엔티티 레벨에서 검증하지 말고 DTO 레벨에서 검증하고 엔티티로 전달하기
-- DTO, Entity 에 setter 사용하지 말고 필요 시 별도 메서드를 만들기
+**개발 환경**
+- **Language & DB**: Java 21, PostgreSQL
+- **Backend**: Spring Boot 3 with JPA (Spring Data JPA, QueryDSL)
+- **Frontend**: React 19, Vite (CSR)
+- **Auth**: JWT Tokens
+- **Real-Time**: STOMP over SockJS, Redis Pub/Sub
+- **Blockchain**: Solidity, Web3j, ERC-20 기반 STO Token Contract
+- **Infrastructure**: Docker, Nginx, Redis
+    - Main Server Container
+    - Match Server Container
+    - Batch Server Container
+    - Postgres Container
+    - Nginx Container
+    - Redis Container
+- **신한 DS 서버 내부망 배포 (https://sto.shinhanacademy.co.kr/)**
 
-```java
-@Getter
-@Builder
-@AllArgsConstructor
-@NoArgsConstructor (access = AccessLevel.PROTECTED)
-public class ~Dto {
-    @NotBlank
-    private String hello;
-    public void changeHello (String hello) {
-      this.hello = hello;
-    }
-}
-```
+---
 
-## 6. DTO <-> Entity 변환 시 MapStruct 사용하기 (실무 표준) & 컨트롤러는 dto만 주고 받고, 서비스 계층에서 DTO <-> Entity 변환
+### 1. 주요 기능
 
-## 7. Entity 클래스 필드명
+#### **금액 충전**
+사용자는 로그인 후 STO 토큰을 구입하기 위한 예수금을 충전할 수 있습니다. (외부 결제 API 없이 시뮬레이션 방식으로 구현)
 
-필드명은 name, id & @Column으로 user_name, token_id 처럼 DB 매핑
+<img width="1219" height="854" alt="금액 충전 화면" src="./README_IMG_SOURCE/charge-1.png" />
 
-```java
-@Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-@Column(name = "token_id")
-private Long id;
-
-@Column(name = "user_name")
-private String name;
-```
+<img width="853" height="540" alt="금액 충전 완료 화면" src="./README_IMG_SOURCE/charge-2.png" />
 
 
-## 8. RestController 리턴 타입 (실무 표준)
+#### **STO 상세 페이지 조회**
+사용자는 거래하고 싶은 STO 항목을 선택해서 조회할 수 있습니다.
+상세 페이지 접속 시 
+- REST 조회 : STO 토큰 자산 이름, 전날 종가, 캔들 차트 과거 데이터, 금일 접속 직전까지의 체결 내역
+- Match 서버 스냅샷 조회 : 현재 호가 데이터
+- 메모리 스냅샷 조회 : 금일 진행 중인 캔들 데이터
+- 상세 페이지 접속 이후 실시간 반영 : 주문 체결 내역, 캔들 차트, 호가창, 미체결 주문 상태
 
-```java
-@PostMapping("/hello")
-public ResponseEntity<?> hello() { 
-    return ResponseEntity.ok(testClass); 
-}
-```
-리턴 타입으로 public TestObject hello() {..} 처럼 쓸 수도 있고 ResponseEntity<?> 로 쓸 수도 있다.
+<img width="1901" height="820" alt="STO 상세 페이지" src="./README_IMG_SOURCE/detail.png" />
 
-Swagger을 사용하면 제네릭으로 와일드카드 <?> 사용 시 정확하게 반영되지 않기 때문에 리턴 타입을 명시해서 쓰기
+#### **호가 - 매수, 매도**
+사용자는 구매하고 싶은 토큰을 선택하여 매수 호가를 넣을 수 있습니다. 매도 호가는 토큰을 보유하고 있을 때만 가능합니다.
+매수 또는 매도 호가를 넣을 경우 main 서버에서 계좌 비밀번호, 호가 단위, 상/하한가, 예수금 및 보유 수량을 검증한 뒤 match 서버로 호가 요청이 전달됩니다.
 
-```java
-@PostMapping("/hello")
-public ResponseEntity<Void> hello() {
-    return ResponseEntity.status(HttpStatus.OK).build();
-}
-```
-위 코드처럼 리턴 타입을 <> 속에 명시하기
+<img width="772" height="537" alt="매수 호가 화면" src="./README_IMG_SOURCE/buy-order.png" />
+
+<img width="348" height="540" alt="매도 화면" src="./README_IMG_SOURCE/sell.png" />
 
 
-<예시>
-```java
-return ResponseEntity.status(HttpStatus.OK).build() : 아무 데이터 없이 200 상태 코드만 반환
+#### **주문 체결**
+match 서버의 메모리 오더북에서 주문이 체결되면 Redis Pub/Sub를 통해 체결 내역과 호가창이 실시간으로 갱신됩니다.
+main 서버는 체결 결과를 바탕으로 예수금, 보유 토큰, 거래 내역, 수수료, 알람을 반영하며, 마이페이지에서 체결 내역을 확인할 수 있습니다.
 
-return ResponseEntity.ok(memberDto) : 200 상태 코드 + memberDto를 json으로 전달
+<img width="1473" height="538" alt="주문 체결 완료 화면" src="./README_IMG_SOURCE/order-complete.png" />
 
-return ResponseEntity.status(HttpStatus.CREATED).body(memberDto) : 201 Created 상태코드 + memberDto를 json으로 전달
+#### **매수/매도를 통한 정산 및 환전**
+사용자는 STO 토큰 매수/매도를 통해 보유 자산을 변경할 수 있으며, 매도 체결 후 정산된 예수금을 환전할 수 있습니다.
+거래 체결 정보는 블록체인 배치를 통해 STO 토큰 컨트랙트의 거래 기록 이벤트로 저장됩니다.
 
-return ResponseEntity.status(HttpStatus.FOUND).header("Location", "/new-url").build()  
-: 302 리다이렉트 상태코드 + 이동할 새로운 URL 주소를 헤더에 담아 전달
-
-
-400에러, 500 에러 (실패 응답) : 전역 에러로 처리하기 (@RestControllerAdvice)
-```
-```java
-// @RestControllerAdvice : 프로젝트 내 컨트롤러에서 발생하는 오류는 이 클래스에서 처리
-@RestControllerAdvice 
-public class GlobalExceptionHandler {
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<400에러가 떴을 때 리턴할 객체> handleIllegalArgumentException(IllegalArgumentException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                             .body(400에러가 떴을 때 리턴할 객체); // 예 : ErrorResponse
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Void> handleGeneralException(Exception e) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                             .body("서버 내부 오류가 발생했습니다.");
-    }
-}
-```
-
-```java
-if (dto.getAge() < 0) {
-    throw new IllegalArgumentException("나이는 0보다 작을 수 없습니다.");
-}
-```
-위 처럼 컨트롤러에서 예외 발생 시 @ExceptionHandler가 붙은 메서드에서 전역 처리
+<img width="1214" height="303" alt="수익 분석 화면" src="./README_IMG_SOURCE/profit-analysis.png" />
 
 
+#### **관리자 페이지**
+관리자는 자산 등록 및 수정, 토큰 상태 관리, 회원 활성/비활성 관리, 플랫폼 수익 조회, 거래 로그 및 시스템 로그 조회를 할 수 있습니다.
+또한 실시간 정산 대시보드에서 오프체인 체결 이후 온체인 기록 상태를 확인할 수 있습니다.
 
-## 9. 스프링에서 DB에 값 수정 (생성 아님)할 때 save 메서드 말고 변경감지로 수정
-# STO
+<img width="1884" height="797" alt="관리자 페이지" src="./README_IMG_SOURCE/admin.png" />
+
+---
+
+### 2. 시연
+
+STO 프로젝트의 주요 화면 흐름과 기능 동작을 영상으로 확인할 수 있습니다.
+
+<a href="https://youtu.be/MlunL9xoCPI?si=2coDM91X7YOIebi-">
+  <img src="https://img.shields.io/badge/YouTube-시연%20영상%20보러가기-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="시연 영상 보러가기" />
+</a>
